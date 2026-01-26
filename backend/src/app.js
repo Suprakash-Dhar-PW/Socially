@@ -7,6 +7,7 @@ import commentRoutes from './routes/comment.routes.js';
 import likeRoutes from './routes/like.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import healthRoutes from './routes/health.routes.js';
+import userRoutes from './routes/user.routes.js';
 
 import { errorHandler } from './middlewares/error.middleware.js';
 
@@ -20,6 +21,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/likes', likeRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api', healthRoutes);
 
 app.use((req, res) => {

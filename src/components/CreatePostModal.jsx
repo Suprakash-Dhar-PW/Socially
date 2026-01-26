@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Image, Globe, Lock, Users, ChevronDown, Loader2, AlertCircle, Briefcase, Calendar, Megaphone, FileText } from 'lucide-react';
+import { X, Image, Globe, Lock, Users, ChevronDown, Loader2, AlertCircle, Briefcase, Calendar, Megaphone, FileText, Smile } from 'lucide-react';
+import EmojiPicker from 'emoji-picker-react';
 import { usePosts } from '../context/PostContext';
+import { useAuth } from '../context/AuthContext';
 
 // Verification Constants
 const MIN_CONTENT_LENGTH = 10;
@@ -9,16 +11,16 @@ const MAX_FILE_SIZE_MB = 10;
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'video/mp4'];
 
 const CreatePostModal = () => {
-  const { isModalOpen, closeCreatePost, addPost } = usePosts();
+  const { isCreatePostOpen, closeCreatePost, createPost } = usePosts();
+  const { user } = useAuth();
   
   // Form State
   const [content, setContent] = useState('');
-  const [image, setImage] = useState(null);
-  const [mediaFile, setMediaFile] = useState(null); // Validated file object
+  const [imageUrl, setImageUrl] = useState(''); // Text URL
   
   // Settings State
-  const [visibility, setVisibility] = useState('Campus Only'); // Default: Campus Only
-  const [category, setCategory] = useState('General Update'); // Default: General
+  const [visibility, setVisibility] = useState('campus'); // Default: Campus Only
+  const [category, setCategory] = useState('general'); // Default: General
   
   // UI State
   const [showVisibilityMenu, setShowVisibilityMenu] = useState(false);
@@ -26,21 +28,56 @@ const CreatePostModal = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   
+  // Selections
+  const [selectedBatches, setSelectedBatches] = useState([]);
+  const [selectedCampuses, setSelectedCampuses] = useState([]);
+  const [selectedBranches, setSelectedBranches] = useState([]);
+  
+  // UI Toggles
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showAdvancedVisibility, setShowAdvancedVisibility] = useState(false);
+
+  // Constants
+  const BATCHES = ['2023', '2024', '2025'];
+  const CAMPUSES = ['Bengaluru', 'Pune', 'Noida', 'Lucknow', 'Patna', 'Indore', 'Online'];
+  const BRANCHES = ['School of Technology', 'School of Management', 'School of Health'];
+
+  // Toggle Helpers
+  const toggleSelection = (item, currentList, setList) => {
+    if (currentList.includes(item)) {
+      setList(currentList.filter(i => i !== item));
+    } else {
+      setList([...currentList, item]);
+    }
+  };
+
+  const toggleAll = (allList, currentList, setList) => {
+    if (currentList.length === allList.length) {
+      setList([]);
+    } else {
+      setList([...allList]);
+    }
+  };
+
+  const onEmojiClick = (emojiObject) => {
+    setContent(prev => prev + emojiObject.emoji);
+    setShowEmojiPicker(false);
+  };
+  
   const textareaRef = useRef(null);
 
   // Focus and Reset
   useEffect(() => {
-    if (isModalOpen) {
+    if (isCreatePostOpen) {
       if (textareaRef.current) textareaRef.current.focus();
       // Reset state on open
       setContent('');
-      setImage(null);
-      setMediaFile(null);
-      setVisibility('Campus Only');
-      setCategory('General Update');
+      setImageUrl('');
+      setVisibility('campus');
+      setCategory('general');
       setError('');
     }
-  }, [isModalOpen]);
+  }, [isCreatePostOpen]);
 
   // Handle ESC key
   useEffect(() => {
@@ -51,58 +88,10 @@ const CreatePostModal = () => {
     return () => window.removeEventListener('keydown', handleEsc);
   }, [closeCreatePost]);
 
-  // -------------------------------------------------
-  // 3. MEDIA VALIDATION
-  // -------------------------------------------------
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    setError('');
-
-    if (!file) return;
-
-    // Type Validation
-    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-      setError('Invalid file type. Please upload a JPG, PNG, or MP4.');
-      return;
-    }
-
-    // Size Validation
-    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-      setError(`File is too large. Max size is ${MAX_FILE_SIZE_MB}MB.`);
-      return;
-    }
-
-    setMediaFile(file);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImage(reader.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // -------------------------------------------------
-  // 7. CONTENT SAFETY (Client-Side Check)
-  // -------------------------------------------------
-  const checkForSimulatedSafety = (text) => {
-    const forbidden = ['spam', 'crypto_scam'];
-    for (const word of forbidden) {
-      if (text.toLowerCase().includes(word)) {
-        throw new Error('Post contains forbidden keywords (simulated safety check).');
-      }
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-
-    // 1. AUTHENTICATION CHECK (Simulated)
-    // In a real app, check context.user or token
-    const isAuthenticated = true; 
-    if (!isAuthenticated) {
-      setError('You must be logged in to post.');
-      return;
-    }
 
     // 2. CONTENT VALIDATION
     if (!content.trim() || content.trim().length < MIN_CONTENT_LENGTH) {
@@ -113,30 +102,40 @@ const CreatePostModal = () => {
     setIsSubmitting(true);
     
     try {
-      // 7. CONTENT SAFETY CHECK
-      checkForSimulatedSafety(content);
+      // Simulate Backend Latency
+      // await new Promise(resolve => setTimeout(resolve, 800));
 
-      // Simulate Backend Latency & 6. RATE LIMITING
-      await new Promise((resolve, reject) => {
-        setTimeout(() => {
-          // Randomly simulate a rate limit error for demonstration
-          // if (Math.random() > 0.9) reject(new Error('Rate limit exceeded. Please wait.'));
-          resolve();
-        }, 800);
-      });
-
-      addPost({
-        author: {
-          name: 'CurrentUser', 
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'
-        },
+      // Determine final visibility payload
+      // If "Custom" is used, send the specific arrays. Even if "Campus Only" is selected, we can just send nulls for "All" or explicit "All".
+      // Backend handles null as "All" if we decide, or we can send full lists. 
+      // To match user request "combinations":
+      
+      let payload = {
         content,
-        image,
-        visibility,
-        category, // 5. POST TYPE
-      });
+        image_url: imageUrl,
+        visibility: 'campus', // Default fallback for legacy
+        category,
+        target_batches: selectedBatches.length > 0 ? selectedBatches : null,
+        target_campuses: selectedCampuses.length > 0 ? selectedCampuses : null,
+        target_branches: selectedBranches.length > 0 ? selectedBranches : null,
+      };
+
+      if (visibility === 'public') {
+          payload.visibility = 'public';
+          payload.target_batches = null; 
+          payload.target_campuses = null;
+          payload.target_branches = null;
+      }
+      
+      // Call context function (which calls API)
+      await createPost(payload);
 
       closeCreatePost();
+      // Reset additional state
+      setSelectedBatches([]);
+      setSelectedCampuses([]);
+      setSelectedBranches([]);
+      setShowAdvancedVisibility(false);
 
     } catch (err) {
       setError(err.message || 'Failed to post. Please try again.');
@@ -144,7 +143,7 @@ const CreatePostModal = () => {
     }
   };
 
-  if (!isModalOpen) return null;
+  if (!isCreatePostOpen) return null;
 
   const isValid = content.trim().length >= MIN_CONTENT_LENGTH;
 
@@ -159,7 +158,7 @@ const CreatePostModal = () => {
 
   return (
     <AnimatePresence>
-      {isModalOpen && (
+      {isCreatePostOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           {/* Backdrop */}
           <motion.div
@@ -176,11 +175,11 @@ const CreatePostModal = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
-            className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl overflow-hidden"
+            className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white sticky top-0 z-10">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white sticky top-0 z-10 shrink-0">
               <h2 className="text-lg font-bold text-slate-800">Create Post</h2>
               <button 
                 onClick={closeCreatePost}
@@ -191,75 +190,146 @@ const CreatePostModal = () => {
               </button>
             </div>
 
-            {/* Error Banner */}
-            {error && (
-              <motion.div 
-                initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                className="bg-rose-50 px-6 py-3 border-b border-rose-100 flex items-center gap-2 text-rose-600 text-xs font-bold"
-              >
-                <AlertCircle size={14} />
-                {error}
-              </motion.div>
-            )}
+            {/* Content Scrollable Area */}
+            <div className="overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-slate-200">
+              
+              {/* Error Banner */}
+              {error && (
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                  className="bg-rose-50 px-6 py-3 mb-4 rounded-xl border border-rose-100 flex items-center gap-2 text-rose-600 text-xs font-bold"
+                >
+                  <AlertCircle size={14} />
+                  {error}
+                </motion.div>
+              )}
 
-            {/* Content */}
-            <div className="p-6">
               <div className="flex gap-3 mb-4">
                 <img 
-                  src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100" 
-                  alt="Current User" 
-                  className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-50"
+                  src={user?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=random`} 
+                  alt={user?.name} 
+                  className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-50 shrink-0"
                 />
-                <div className="flex-1">
-                  <h3 className="font-bold text-slate-900 text-sm leading-tight mb-1">CurrentUser</h3>
+                <div className="flex-1 w-full">
+                  <h3 className="font-bold text-slate-900 text-sm leading-tight mb-2">{user?.name}</h3>
                   
                   {/* Selectors Row */}
-                  <div className="flex gap-2">
-                    {/* Visibility Selector */}
+                  <div className="flex flex-wrap gap-2 relative">
+                    {/* Visibility Main Selector */}
                     <div className="relative">
-                      <button 
-                        onClick={() => { setShowVisibilityMenu(!showVisibilityMenu); setShowCategoryMenu(false); }}
-                        className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100/80 px-2.5 py-1 rounded-lg hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200"
-                      >
-                        {visibility === 'Public' && <Globe size={10} />}
-                        {visibility === 'Campus Only' && <Users size={10} />}
-                        {visibility}
-                        <ChevronDown size={10} />
-                      </button>
+                       <button
+                         onClick={() => setShowAdvancedVisibility(!showAdvancedVisibility)}
+                         className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition-all border ${
+                           showAdvancedVisibility ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'text-slate-500 bg-slate-100/80 border-transparent hover:border-slate-200'
+                         }`}
+                       >
+                         {visibility === 'public' ? <Globe size={11} /> : <Users size={11} />}
+                         {visibility === 'public' ? 'Public' : 'Custom Audience'}
+                         <ChevronDown size={11} className={`transition-transform ${showAdvancedVisibility ? 'rotate-180' : ''}`} />
+                       </button>
 
-                      <AnimatePresence>
-                        {showVisibilityMenu && (
-                          <motion.div 
-                            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                            className="absolute top-full left-0 mt-1 w-40 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-20 overflow-hidden"
-                          >
-                            {['Public', 'Campus Only'].map((opt) => (
-                              <button
-                                key={opt}
-                                onClick={() => {
-                                  setVisibility(opt);
-                                  setShowVisibilityMenu(false);
-                                }}
-                                className={`w-full text-left px-4 py-2.5 text-[11px] font-bold flex items-center gap-2 transition-colors ${visibility === opt ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
-                              >
-                                {opt === 'Public' ? <Globe size={14} /> : <Users size={14} />}
-                                {opt}
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                       {/* ADVANCED VISIBILITY POPUP */}
+                       <AnimatePresence>
+                         {showAdvancedVisibility && (
+                           <motion.div 
+                             initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                             className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] border border-slate-100 p-4 z-50 origin-top-left"
+                           >
+                              <div className="space-y-4">
+                                {/* Main Type */}
+                                <div className="flex bg-slate-100 p-1 rounded-xl">
+                                  <button 
+                                    onClick={() => setVisibility('public')}
+                                    className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all ${visibility === 'public' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                  >Public</button>
+                                  <button 
+                                    onClick={() => setVisibility('campus')}
+                                    className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all ${visibility === 'campus' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                  >Custom</button>
+                                </div>
+
+                                {visibility === 'campus' && (
+                                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200">
+                                    
+                                    {/* Batches Group */}
+                                    <div>
+                                      <div className="flex justify-between items-center mb-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Batches</label>
+                                        <button onClick={() => toggleAll(BATCHES, selectedBatches, setSelectedBatches)} className="text-[9px] font-bold text-indigo-600 hover:underline">
+                                           {selectedBatches.length === BATCHES.length ? 'Clear' : 'Select All'}
+                                        </button>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {BATCHES.map(batch => (
+                                          <button 
+                                            key={batch}
+                                            onClick={() => toggleSelection(batch, selectedBatches, setSelectedBatches)}
+                                            className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-all ${selectedBatches.includes(batch) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200'}`}
+                                          >
+                                            {batch}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {/* Campus Group */}
+                                    <div>
+                                      <div className="flex justify-between items-center mb-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Campuses</label>
+                                        <button onClick={() => toggleAll(CAMPUSES, selectedCampuses, setSelectedCampuses)} className="text-[9px] font-bold text-indigo-600 hover:underline">
+                                           {selectedCampuses.length === CAMPUSES.length ? 'Clear' : 'Select All'}
+                                        </button>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {CAMPUSES.map(campus => (
+                                          <button 
+                                            key={campus}
+                                            onClick={() => toggleSelection(campus, selectedCampuses, setSelectedCampuses)}
+                                            className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-all ${selectedCampuses.includes(campus) ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-slate-500 border-slate-200 hover:border-teal-200'}`}
+                                          >
+                                            {campus}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {/* Branch Group */}
+                                    <div>
+                                      <div className="flex justify-between items-center mb-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Branches</label>
+                                        <button onClick={() => toggleAll(BRANCHES, selectedBranches, setSelectedBranches)} className="text-[9px] font-bold text-indigo-600 hover:underline">
+                                           {selectedBranches.length === BRANCHES.length ? 'Clear' : 'Select All'}
+                                        </button>
+                                      </div>
+                                      <div className="flex flex-col gap-1.5">
+                                        {BRANCHES.map(branch => (
+                                          <button 
+                                            key={branch}
+                                            onClick={() => toggleSelection(branch, selectedBranches, setSelectedBranches)}
+                                            className={`px-2 py-1.5 rounded-md text-[10px] font-bold border text-left transition-all ${selectedBranches.includes(branch) ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-slate-500 border-slate-200 hover:border-orange-200'}`}
+                                          >
+                                            {branch}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                  </div>
+                                )}
+                              </div>
+                           </motion.div>
+                         )}
+                       </AnimatePresence>
                     </div>
 
                     {/* Category Selector */}
                     <div className="relative">
                       <button 
-                        onClick={() => { setShowCategoryMenu(!showCategoryMenu); setShowVisibilityMenu(false); }}
-                        className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100/80 px-2.5 py-1 rounded-lg hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200"
+                        onClick={() => { setShowCategoryMenu(!showCategoryMenu); setShowAdvancedVisibility(false); }}
+                        className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100/80 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200"
                       >
-                        <currentCategory.icon size={10} className={currentCategory.color} />
-                        {category}
-                        <ChevronDown size={10} />
+                         <ChevronDown size={10} />
+                         {currentCategory ? currentCategory.label : category}
                       </button>
 
                       <AnimatePresence>
@@ -294,52 +364,74 @@ const CreatePostModal = () => {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Share your thoughts... (min 10 chars)"
-                className="w-full h-32 text-base text-slate-700 placeholder:text-slate-300 border-none outline-none resize-none bg-transparent"
+                className="w-full text-base text-slate-700 placeholder:text-slate-300 border-none outline-none resize-none bg-transparent min-h-[120px]"
               />
+              
+              <div className="mb-4">
+                 <input 
+                   type="text"
+                   value={imageUrl}
+                   onChange={(e) => setImageUrl(e.target.value)}
+                   placeholder="Image URL (optional)..."
+                   className="w-full text-xs p-3 bg-slate-50 rounded-xl outline-none text-slate-600 placeholder:text-slate-400 border border-slate-100 focus:border-indigo-200 transition-all"
+                 />
+              </div>
 
-              {image && (
+              {imageUrl && (
                 <div className="relative mb-4 rounded-xl overflow-hidden group border border-slate-100">
-                  <img src={image} alt="Preview" className="w-full max-h-[300px] object-cover" />
+                  <img src={imageUrl} alt="Preview" className="w-full max-h-[300px] object-cover" onError={(e) => e.target.style.display='none'} />
                   <button 
-                    onClick={() => { setImage(null); setMediaFile(null); }}
-                    className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-sm"
+                    onClick={() => setImageUrl('')}
+                    className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors backdrop-blur-sm"
                   >
                     <X size={16} />
                   </button>
                 </div>
               )}
+            </div>
 
-              {/* Footer Actions */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                <div className="flex gap-2">
-                  <label className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl cursor-pointer transition-colors" title="Attach Image or Video">
-                    <input type="file" accept="image/png,image/jpeg,video/mp4" className="hidden" onChange={handleImageUpload} />
-                    <Image size={22} />
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="flex flex-col items-end">
-                    <span className={`text-[10px] font-bold transition-colors ${content.length > 0 && content.length < MIN_CONTENT_LENGTH ? 'text-orange-500' : 'text-slate-300'}`}>
-                      {content.length > 0 && content.length < MIN_CONTENT_LENGTH ? `${MIN_CONTENT_LENGTH - content.length} more` : `${content.length}/500`}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={handleSubmit}
-                    disabled={!isValid || isSubmitting}
-                    className={`
-                      px-6 py-2.5 rounded-xl text-sm font-black text-white transition-all transform flex items-center gap-2
-                      ${(!isValid || isSubmitting) 
-                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
-                        : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-200 hover:-translate-y-0.5'
-                      }
-                    `}
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between p-6 pt-4 border-t border-slate-50 bg-white sticky bottom-0 z-10">
+              <div className="flex gap-2 relative">
+                  <button 
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="p-2.5 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition-all"
                   >
-                    {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-                    {isSubmitting ? 'Posting...' : 'Post'}
+                    <Smile size={22} />
                   </button>
+                  {/* Emoji Picker Popover */}
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-full left-0 mb-2 z-50">
+                      {/* We will lazy load or load the picker here if available, or just a placeholder if not. 
+                          Since package.json says emoji-picker-react is there, we use it. */}
+                      <React.Suspense fallback={<div className="bg-white p-4 shadow-xl rounded-2xl">Loading...</div>}>
+                         <EmojiPicker onEmojiClick={onEmojiClick} width={300} height={400} />
+                      </React.Suspense>
+                    </div>
+                  )}
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex flex-col items-end">
+                  <span className={`text-[10px] font-bold transition-colors ${content.length > 0 && content.length < MIN_CONTENT_LENGTH ? 'text-orange-500' : 'text-slate-300'}`}>
+                    {content.length > 0 && content.length < MIN_CONTENT_LENGTH ? `${MIN_CONTENT_LENGTH - content.length} more` : `${content.length}/500`}
+                  </span>
                 </div>
+
+                <button
+                  onClick={handleSubmit}
+                  disabled={!isValid || isSubmitting}
+                  className={`
+                    px-6 py-2.5 rounded-xl text-sm font-black text-white transition-all transform flex items-center gap-2
+                    ${(!isValid || isSubmitting) 
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                      : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-200 hover:-translate-y-0.5'
+                    }
+                  `}
+                >
+                  {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                  {isSubmitting ? 'Posting...' : 'Post'}
+                </button>
               </div>
             </div>
           </motion.div>

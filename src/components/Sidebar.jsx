@@ -4,29 +4,42 @@ import {
   ChevronDown, LayoutGrid, Bookmark, Star, Settings, Bell,
   Sparkles, ShieldCheck, Zap
 } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
 
 const Sidebar = () => {
+  const { user } = useAuth();
+  const location = useLocation();
+  
   const menuItems = [
-    { icon: LayoutGrid, label: 'Feed', active: true },
-    { icon: Users, label: 'Connections' },
-    { icon: Calendar, label: 'Events', badge: '4' },
-    { icon: Video, label: 'Live Stream' },
-    { icon: Star, label: 'Favorites' },
-    { icon: Bookmark, label: 'Saved' },
-    { icon: FileText, label: 'Resources' },
+    { icon: LayoutGrid, label: 'Feed', path: '/feed' },
+    { icon: Users, label: 'Connections', path: '/connections' },
+    { icon: Calendar, label: 'Events', badge: '4', path: '/events' },
+    { icon: Video, label: 'Live Stream', path: '/live' },
+    { icon: Star, label: 'Favorites', path: '/favorites' },
+    { icon: Bookmark, label: 'Saved', path: '/saved' },
+    { icon: FileText, label: 'Resources', path: '/resources' },
   ];
+
+  const getIsActive = (itemPath) => {
+      // Simple active check logic
+      if (itemPath === '/feed') return location.pathname === '/feed';
+      return location.pathname.startsWith(itemPath);
+  };
 
   return (
     /* PREMIUM FRAME: Borderless feel with high-end shadow */
     <aside className="w-[260px] hidden lg:flex flex-col h-[calc(100vh-64px)] overflow-y-auto pr-3 pl-5 no-scrollbar py-6 sticky top-16 bg-white/80 backdrop-blur-xl border-r border-slate-100/50">
       
       {/* 1. High-End Profile Header */}
-      <div className="flex items-center gap-3.5 px-2 mb-10 group cursor-pointer relative">
+      <Link to={`/profile/${user?.id}`} className="flex items-center gap-3.5 px-2 mb-10 group cursor-pointer relative">
         <div className="relative shrink-0">
           <div className="absolute -inset-1 bg-gradient-to-tr from-indigo-500 to-fuchsia-500 rounded-full blur-[2px] opacity-0 group-hover:opacity-40 transition-opacity duration-500"></div>
-          <img 
-            src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100" 
+           {/* ... Image & Info (Same as before) ... */}
+           {/* Re-implementing inner content since replace overwrites block */}
+           <img 
+            src={user?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=random`} 
             className="w-11 h-11 rounded-full object-cover relative border-2 border-white shadow-sm"
             alt="Profile"
           />
@@ -34,52 +47,56 @@ const Sidebar = () => {
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <h3 className="font-black text-slate-900 text-[14px] tracking-tight truncate">Jakob Botosh</h3>
+            <h3 className="font-black text-slate-900 text-[14px] tracking-tight truncate">{user?.name || 'Guest User'}</h3>
             <ShieldCheck size={14} className="text-indigo-500 shrink-0" fill="currentColor" fillOpacity={0.1} />
           </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Campus Elite</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{user?.role || 'Student'}</p>
         </div>
-      </div>
+      </Link>
 
       {/* 2. Navigation with "Floating" Active State */}
       <nav className="flex-1 space-y-8">
         <div>
           <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-[0.25em] mb-5 ml-2">Navigation</h4>
           <ul className="space-y-1">
-            {menuItems.map((item, index) => (
-              <li key={index}>
-                <button 
-                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-2xl transition-all duration-500 group relative ${
-                    item.active 
-                      ? 'text-indigo-600' 
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  {item.active && (
-                    <motion.div 
-                      layoutId="activeNav"
-                      className="absolute inset-0 bg-indigo-50/60 rounded-[1.25rem] border border-indigo-100/50"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                  
-                  <div className="flex items-center gap-4 relative z-10">
-                    <item.icon className={`w-5 h-5 transition-transform duration-300 ${
-                      item.active ? 'text-indigo-600 scale-110' : 'text-slate-400 group-hover:scale-110 group-hover:text-indigo-500'
-                    }`} />
-                    <span className={`font-bold text-[13px] tracking-tight ${item.active ? 'text-indigo-700' : ''}`}>
-                      {item.label}
-                    </span>
-                  </div>
-                  
-                  {item.badge && (
-                    <span className="relative z-10 text-[9px] font-black px-2 py-0.5 bg-white shadow-sm border border-slate-100 rounded-lg text-slate-600 group-hover:border-indigo-200">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
+            {menuItems.map((item, index) => {
+                const isActive = getIsActive(item.path);
+                return (
+                  <li key={index}>
+                    <Link
+                      to={item.path}
+                      className={`w-full flex items-center justify-between px-4 py-2.5 rounded-2xl transition-all duration-500 group relative ${
+                        isActive 
+                          ? 'text-indigo-600' 
+                          : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div 
+                          layoutId="activeNav"
+                          className="absolute inset-0 bg-indigo-50/60 rounded-[1.25rem] border border-indigo-100/50"
+                          transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                        />
+                      )}
+                      
+                      <div className="flex items-center gap-4 relative z-10">
+                        <item.icon className={`w-5 h-5 transition-transform duration-300 ${
+                          isActive ? 'text-indigo-600 scale-110' : 'text-slate-400 group-hover:scale-110 group-hover:text-indigo-500'
+                        }`} />
+                        <span className={`font-bold text-[13px] tracking-tight ${isActive ? 'text-indigo-700' : ''}`}>
+                          {item.label}
+                        </span>
+                      </div>
+                      
+                      {item.badge && (
+                        <span className="relative z-10 text-[9px] font-black px-2 py-0.5 bg-white shadow-sm border border-slate-100 rounded-lg text-slate-600 group-hover:border-indigo-200">
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+            })}
           </ul>
         </div>
 

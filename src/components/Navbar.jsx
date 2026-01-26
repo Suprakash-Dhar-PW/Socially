@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { 
   Search, Bell, ChevronDown, Grid, Layout, Command, 
-  Compass, Users, Briefcase, PlusCircle, MessageCircle 
+  Compass, Users, Briefcase, PlusCircle, MessageCircle, User, LogOut 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { usePosts } from '../context/PostContext';
 
 const Navbar = () => {
+  const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('Explore');
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const { openCreatePost } = usePosts();
 
   return (
@@ -15,7 +19,7 @@ const Navbar = () => {
       <div className="max-w-[1500px] mx-auto flex items-center justify-between gap-8">
         
         {/* 1. Brand Logo - Minimal & Bold */}
-        <div className="flex items-center gap-3 shrink-0">
+        <Link to="/feed" className="flex items-center gap-3 shrink-0">
           <div className="relative group cursor-pointer">
             <div className="absolute -inset-1 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-300"></div>
             <div className="relative bg-slate-900 p-2 rounded-xl">
@@ -25,16 +29,18 @@ const Navbar = () => {
           <span className="text-lg font-black text-slate-900 tracking-tighter hidden xl:block">
             WeShare
           </span>
-        </div>
+        </Link>
 
         {/* 2. Central Navigation - Fills the "Empty" space */}
         <div className="hidden lg:flex items-center bg-slate-100/50 p-1 rounded-2xl border border-slate-100">
-          <TabItem 
-            icon={<Compass size={18} />} 
-            label="Explore" 
-            active={activeTab === 'Explore'} 
-            onClick={() => setActiveTab('Explore')} 
-          />
+          <Link to="/feed">
+            <TabItem 
+                icon={<Compass size={18} />} 
+                label="Explore" 
+                active={activeTab === 'Explore'} 
+                onClick={() => setActiveTab('Explore')} 
+            />
+          </Link>
           <TabItem 
             icon={<Users size={18} />} 
             label="Communities" 
@@ -70,19 +76,61 @@ const Navbar = () => {
           </div>
 
           {/* Profile - Sleeker & More Integrated */}
-          <div className="flex items-center gap-2 pl-4 border-l border-slate-100 ml-2 cursor-pointer group">
-            <div className="relative">
-              <img 
-                src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100" 
-                className="w-9 h-9 rounded-xl object-cover ring-2 ring-transparent group-hover:ring-indigo-100 transition-all"
-                alt="Profile"
-              />
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-500 border-2 border-white rounded-full" />
-            </div>
-            <ChevronDown className="w-4 h-4 text-slate-300 group-hover:text-indigo-500 transition-colors" />
+          {/* User Profile Dropdown */}
+          <div className="relative pl-4 border-l border-slate-100 ml-2">
+            <button 
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="flex items-center gap-2 group cursor-pointer"
+            >
+              <div className="relative">
+                <img 
+                  src={user?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=random`} 
+                  className="w-9 h-9 rounded-xl object-cover ring-2 ring-transparent group-hover:ring-indigo-100 transition-all"
+                  alt="Profile"
+                />
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-500 border-2 border-white rounded-full" />
+              </div>
+              <ChevronDown className={`w-4 h-4 text-slate-300 group-hover:text-indigo-500 transition-transform duration-300 ${showProfileMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+              {showProfileMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 overflow-hidden"
+                >
+                  <div className="px-4 py-3 border-b border-slate-50 mb-1">
+                    <p className="text-sm font-black text-slate-800 truncate">{user?.name}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{user?.role || 'Student'}</p>
+                  </div>
+                  
+                  <Link 
+                    to={`/profile/${user?.id}`}
+                    onClick={() => setShowProfileMenu(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors"
+                  >
+                    <User size={16} />
+                    My Profile
+                  </Link>
+
+                  <button 
+                    onClick={() => {
+                        logout();
+                        setShowProfileMenu(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-bold text-rose-500 hover:bg-rose-50 transition-colors text-left"
+                  >
+                    <LogOut size={16} />
+                    Logout
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
-
       </div>
     </nav>
   );

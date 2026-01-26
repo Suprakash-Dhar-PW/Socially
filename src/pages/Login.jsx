@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layout, ArrowRight, Loader2, Sparkles, Mail, Lock, User } from 'lucide-react';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -16,6 +17,7 @@ const Login = () => {
     password: ''
   });
   
+  const { login } = useAuth();
   const [error, setError] = useState('');
 
   const handleChange = (e) => {
@@ -37,9 +39,8 @@ const Login = () => {
       const res = await axios.post(endpoint, payload);
       
       if (res.data.token) {
-        localStorage.setItem('token', res.data.token);
-        localStorage.setItem('user', JSON.stringify(res.data.user || { name: 'User' }));
-        window.dispatchEvent(new Event('storage')); // Notify other components
+        // Use context login function
+        login(res.data.token, res.data.user);
         navigate('/feed');
       } else if (res.data.message && !isLogin) {
         // Registration successful

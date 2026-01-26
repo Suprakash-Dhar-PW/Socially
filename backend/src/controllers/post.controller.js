@@ -7,7 +7,15 @@ import { db } from '../config/db.js';
 // CREATE POST
 export const createPost = async (req, res, next) => {
   try {
-    const { content, visibility, category, image_url } = req.body;
+    const {
+      content,
+      visibility,
+      category,
+      image_url,
+      target_batches,
+      target_campuses,
+      target_branches
+    } = req.body;
     const userId = req.user.id;
 
     if (!content || content.trim().length < 5) {
@@ -15,9 +23,18 @@ export const createPost = async (req, res, next) => {
     }
 
     const [result] = await db.query(
-      `INSERT INTO posts (user_id, content, image_url, visibility, category)
-       VALUES (?, ?, ?, ?, ?)`,
-      [userId, content, image_url || null, visibility || 'campus', category || 'general']
+      `INSERT INTO posts (user_id, content, image_url, visibility, category, target_batches, target_campuses, target_branches)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        userId,
+        content,
+        image_url || null,
+        visibility || 'campus',
+        category || 'general',
+        target_batches ? JSON.stringify(target_batches) : null,
+        target_campuses ? JSON.stringify(target_campuses) : null,
+        target_branches ? JSON.stringify(target_branches) : null
+      ]
     );
 
     res.status(201).json({
@@ -38,7 +55,18 @@ export const getFeed = async (req, res, next) => {
   try {
     const currentUserId = req.user.id;
     const limit = parseInt(req.query.limit) || 20;
-    const cursor = req.query.cursor ? new Date(req.query.cursor) : new Date();
+    // Add 10 seconds buffer to cursor to handle potential db timestamp vs server time drift or truncation
+    const cursor = req.query.cursor ? new Date(req.query.cursor) : new Date(Date.now() + 10000);
+
+    const [userResult] = await db.query('SELECT batch, campus, branch FROM users WHERE id = ?', [currentUserId]);
+    const currentUser = userResult[0] || {};
+
+    // Safety fallback
+    // We need to pass a JSON-formatted string to JSON_CONTAINS.
+    // e.g. if batch is '2024', we need to pass '"2024"'
+    const userBatch = currentUser.batch ? JSON.stringify(currentUser.batch) : null;
+    const userCampus = currentUser.campus ? JSON.stringify(currentUser.campus) : null;
+    const userBranch = currentUser.branch ? JSON.stringify(currentUser.branch) : null;
 
     const [posts] = await db.query(`
       SELECT 
@@ -48,6 +76,9 @@ export const getFeed = async (req, res, next) => {
         posts.visibility,
         posts.category,
         posts.created_at,
+        posts.target_batches,
+        posts.target_campuses,
+        posts.target_branches,
         users.id AS user_id,
         users.name AS user_name,
         users.avatar_url,
@@ -57,9 +88,36 @@ export const getFeed = async (req, res, next) => {
       FROM posts
       JOIN users ON posts.user_id = users.id
       WHERE posts.created_at < ?
+      AND (
+        posts.user_id = ?
+        OR posts.visibility = 'public'
+        OR (
+          posts.visibility = 'campus' 
+          AND (
+             posts.target_batches IS NULL 
+             OR JSON_CONTAINS(posts.target_batches, ?)
+          )
+          AND (
+             posts.target_campuses IS NULL 
+             OR JSON_CONTAINS(posts.target_campuses, ?)
+          )
+          AND (
+             posts.target_branches IS NULL 
+             OR JSON_CONTAINS(posts.target_branches, ?)
+          )
+        )
+      )
       ORDER BY posts.created_at DESC
       LIMIT ?
-    `, [currentUserId, cursor, limit]);
+    `, [
+      currentUserId,
+      cursor,
+      currentUserId, // for own posts check
+      userBatch,
+      userCampus,
+      userBranch,
+      limit
+    ]);
 
     // Format for frontend
     const formattedPosts = posts.map(p => ({

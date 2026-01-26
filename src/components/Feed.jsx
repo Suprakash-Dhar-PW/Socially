@@ -7,8 +7,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { usePosts } from '../context/PostContext';
 
 const Feed = () => {
-  const { posts, openCreatePost, addComment } = usePosts();
-  const [showReport, setShowReport] = useState(false);
+  const { posts, openCreatePost, addComment, toggleLike, fetchComments, reportPost } = usePosts();
+  const [reportPostId, setReportPostId] = useState(null);
+  const [reportReason, setReportReason] = useState(null);
+
+  const handleReportSubmit = async () => {
+    if (reportPostId && reportReason) {
+      await reportPost(reportPostId, reportReason);
+      setReportPostId(null);
+      setReportReason(null);
+    }
+  };
 
   const stories = [
     { name: 'Your Story', img: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', isUser: true },
@@ -75,15 +84,17 @@ const Feed = () => {
           <PostCard 
             key={post.id} 
             post={post} 
-            setShowReport={setShowReport} 
+            setShowReport={() => setReportPostId(post.id)} 
             addComment={addComment}
+            toggleLike={toggleLike}
+            fetchComments={fetchComments}
           />
         ))}
       </div>
 
       {/* 4. Reporting Modal */}
       <AnimatePresence>
-        {showReport && (
+        {reportPostId && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-slate-900/30 backdrop-blur-sm"
@@ -101,15 +112,29 @@ const Feed = () => {
                 
                 <div className="space-y-2 mb-8">
                   {['Inappropriate Content', 'Spam', 'Harassment', 'Other'].map(reason => (
-                    <button key={reason} className="w-full py-3.5 rounded-2xl border border-slate-100 text-xs font-bold text-slate-600 hover:bg-white hover:shadow-md hover:border-transparent transition-all">
+                    <button 
+                      key={reason} 
+                      onClick={() => setReportReason(reason)}
+                      className={`w-full py-3.5 rounded-2xl border text-xs font-bold transition-all ${
+                        reportReason === reason 
+                        ? 'bg-rose-50 border-rose-100 text-rose-600 shadow-inner' 
+                        : 'border-slate-100 text-slate-600 hover:bg-white hover:shadow-md hover:border-transparent'
+                      }`}
+                    >
                       {reason}
                     </button>
                   ))}
                 </div>
 
                 <div className="flex gap-3">
-                  <button onClick={() => setShowReport(false)} className="flex-1 text-[11px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600">Cancel</button>
-                  <button className="flex-1 py-4 bg-slate-900 rounded-2xl text-white text-[11px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all shadow-xl shadow-slate-200">Submit</button>
+                  <button onClick={() => setReportPostId(null)} className="flex-1 text-[11px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600">Cancel</button>
+                  <button 
+                    onClick={handleReportSubmit}
+                    disabled={!reportReason}
+                    className={`flex-1 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl shadow-slate-200 ${
+                       reportReason ? 'bg-slate-900 text-white hover:bg-rose-600' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >Submit</button>
                 </div>
               </div>
             </motion.div>
@@ -122,15 +147,21 @@ const Feed = () => {
 
 /* --- Sub Components --- */
 
-const PostCard = ({ post, setShowReport, addComment }) => {
+const PostCard = ({ post, setShowReport, addComment, toggleLike, fetchComments }) => {
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
-  const [liked, setLiked] = useState(post.isLiked || false);
   const [commentText, setCommentText] = useState('');
 
   const handleCreateComment = () => {
     if (!commentText.trim()) return;
     addComment(post.id, commentText);
     setCommentText('');
+  };
+
+  const toggleComments = () => {
+      if (!isCommentsOpen) {
+          fetchComments(post.id);
+      }
+      setIsCommentsOpen(!isCommentsOpen);
   };
 
   const handleKeyDown = (e) => {
@@ -193,17 +224,17 @@ const PostCard = ({ post, setShowReport, addComment }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 bg-slate-50/50 p-1 rounded-2xl border border-slate-100/50">
             <PostAction 
-              active={liked} 
-              onClick={() => setLiked(!liked)} 
-              icon={<Heart size={18} fill={liked ? "#f43f5e" : "none"} />} 
-              count={liked && !post.isLiked ? (parseInt(post.likes) || 0) + 1 : post.likes} 
+              active={post.isLiked} 
+              onClick={() => toggleLike(post.id)} 
+              icon={<Heart size={18} fill={post.isLiked ? "#f43f5e" : "none"} />} 
+              count={post.likes} 
               color="hover:text-rose-500" 
             />
             <PostAction 
               active={isCommentsOpen} 
-              onClick={() => setIsCommentsOpen(!isCommentsOpen)} 
+              onClick={toggleComments} 
               icon={<MessageCircle size={18} />} 
-              count={post.comments?.length || 0}
+              count={post.commentCount || 0}
               color="hover:text-indigo-500" 
             />
             <PostAction icon={<Share2 size={18} />} count={post.shares} color="hover:text-emerald-500" />
