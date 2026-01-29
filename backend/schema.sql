@@ -1,65 +1,56 @@
-CREATE DATABASE IF NOT EXISTS socially;
-USE socially;
-
--- USER TABLE (Base identity)
+-- USER TABLE (Updated to UUID)
 CREATE TABLE IF NOT EXISTS users (
-  id INT AUTO_INCREMENT PRIMARY KEY,
+  id UUID PRIMARY KEY, -- Will match Supabase Auth UUID
   name VARCHAR(255) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  role ENUM('student', 'admin', 'moderator') DEFAULT 'student',
-  avatar_url VARCHAR(512),
-  bio VARCHAR(500),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  username VARCHAR(255) UNIQUE,
+  role TEXT DEFAULT 'student',
+  avatar_url TEXT,
+  bio TEXT,
+  batch TEXT,
+  campus TEXT,
+  branch TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- POSTS TABLE (Core content)
+-- POSTS TABLE (Updated to UUID)
 CREATE TABLE IF NOT EXISTS posts (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
-  image_url VARCHAR(512), -- Stored as URL as requested
-  visibility ENUM('public', 'private', 'campus') DEFAULT 'campus',
-  category VARCHAR(50) DEFAULT 'general',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_posts_created_at (created_at DESC), -- Optimize feed sort
-  INDEX idx_posts_user (user_id), -- Optimize profile feed
-  INDEX idx_category (category)
+  image_url TEXT,
+  visibility TEXT DEFAULT 'campus',
+  category TEXT DEFAULT 'general',
+  target_batches JSONB DEFAULT '[]',
+  target_campuses JSONB DEFAULT '[]',
+  target_branches JSONB DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- COMMENTS TABLE
+-- COMMENTS TABLE (Updated to UUID)
 CREATE TABLE IF NOT EXISTS comments (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  post_id INT NOT NULL,
-  user_id INT NOT NULL,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  parent_id UUID REFERENCES comments(id) ON DELETE CASCADE,
   text TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_comments_post (post_id, created_at ASC) -- Optimize comment loading
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- LIKES TABLE (Composite PK for uniqueness)
+-- LIKES TABLE (Updated to UUID)
 CREATE TABLE IF NOT EXISTS likes (
-  post_id INT NOT NULL,
-  user_id INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (post_id, user_id), -- Prevents duplicate likes
-  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_likes_user (user_id) -- See what a user liked
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (post_id, user_id)
 );
 
--- REPORTS TABLE (Moderation)
+-- REPORTS TABLE (Updated to UUID)
 CREATE TABLE IF NOT EXISTS reports (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  reporter_id INT NOT NULL,
-  post_id INT NOT NULL,
-  reason VARCHAR(255) NOT NULL,
-  status ENUM('pending', 'resolved', 'dismissed') DEFAULT 'pending',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-  INDEX idx_reports_status (status)
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
