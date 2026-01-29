@@ -10,19 +10,29 @@ export const createReport = async (req, res, next) => {
   }
 
   try {
-    const [result] = await db.query(
-      'INSERT INTO reports (reporter_id, post_id, reason, status) VALUES (?, ?, ?, ?)',
-      [reporterId, postId, reason, 'pending']
-    );
+    const { data, error } = await db
+      .from('reports')
+      .insert([{
+        reporter_id: reporterId,
+        post_id: postId,
+        reason,
+        status: 'pending'
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23503') { // Foreign key violation
+        return res.status(404).json({ error: 'Post or user not found' });
+      }
+      return res.status(400).json({ error: error.message });
+    }
 
     res.status(201).json({
       message: 'Report submitted successfully',
-      reportId: result.insertId,
+      reportId: data.id,
     });
   } catch (err) {
-    if (err.code === 'ER_NO_REFERENCED_ROW_2') {
-      return res.status(404).json({ error: 'Post or user not found' });
-    }
     next(err);
   }
 };
