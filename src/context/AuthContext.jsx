@@ -14,37 +14,52 @@ export const AuthProvider = ({ children }) => {
 
 
 
-  const fetchMe = async () => {
+  const fetchMe = async (force = false) => {
     if (!token) {
       setLoading(false);
       return;
     }
 
+    // If we already have a user and aren't forcing a refresh, skip the network call
+    if (user && !force) {
+      setLoading(false);
+      return;
+    }
+
     try {
+      setLoading(true);
       const res = await api.get('/api/auth/me');
       setUser(res.data.user);
     } catch (err) {
       console.error('Failed to fetch user:', err);
-      logout();
+      // Only logout if it's a 401/403 or other critical error
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        logout();
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const login = (newToken, userData) => {
+    localStorage.setItem('token', newToken);
     setToken(newToken);
     setUser(userData);
   };
 
   const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setToken(null);
     setUser(null);
-    localStorage.removeItem('user'); // Clean up partial data if any
   };
 
   useEffect(() => {
-    localStorage.setItem('token', token || '');
-    fetchMe();
+    if (token) {
+      fetchMe();
+    } else {
+      setLoading(false);
+    }
   }, [token]);
 
   const updateUser = (userData) => {

@@ -10,15 +10,24 @@ export const addComment = async (req, res, next) => {
       return res.status(400).json({ error: 'Comment cannot be empty' });
     }
 
-    const [result] = await db.query(
-      `INSERT INTO comments (post_id, user_id, text, parent_id)
-       VALUES (?, ?, ?, ?)`,
-      [postId, userId, text, parentId || null]
-    );
+    const { data, error } = await db
+      .from('comments')
+      .insert([{
+        post_id: postId,
+        user_id: userId,
+        text,
+        parent_id: parentId || null
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
 
     res.status(201).json({
       message: 'Comment added',
-      commentId: result.insertId
+      commentId: data.id
     });
   } catch (err) {
     next(err);
@@ -29,15 +38,26 @@ export const getComments = async (req, res, next) => {
   try {
     const { postId } = req.params;
 
-    const [comments] = await db.query(`
-      SELECT comments.id, comments.text, comments.parent_id, comments.created_at, comments.user_id, users.name, users.avatar_url
-      FROM comments
-      JOIN users ON comments.user_id = users.id
-      WHERE comments.post_id = ?
-      ORDER BY comments.created_at ASC
-    `, [postId]);
+    const { data: comments, error } = await db
+      .from('comments')
+      .select(`
+        id, text, parent_id, created_at, user_id,
+        user:user_id (name, avatar_url)
+      `)
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true });
 
-    res.json(comments);
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    const formattedComments = comments.map(c => ({
+      ...c,
+      name: c.user?.name,
+      avatar_url: c.user?.avatar_url
+    }));
+
+    res.json(formattedComments);
   } catch (err) {
     next(err);
   }
@@ -47,19 +67,30 @@ export const updateComment = async (req, res, next) => {
   try {
     const { commentId } = req.params;
     const { text } = req.body;
-    const userId = req.user.id; // Corrected from req.user.id
+    const userId = req.user.id;
 
-    // Check ownership
-    const [existing] = await db.query('SELECT user_id FROM comments WHERE id = ?', [commentId]);
-    if (existing.length === 0) return res.status(404).json({ error: 'Comment not found' });
+    const { data: existing, error: fetchError } = await db
+      .from('comments')
+      .select('user_id')
+      .eq('id', commentId)
+      .single();
 
-    if (existing[0].user_id !== userId) {
+    if (fetchError || !existing) return res.status(404).json({ error: 'Comment not found' });
+
+    if (existing.user_id !== userId) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    await db.query('UPDATE comments SET text = ? WHERE id = ?', [text, commentId]);
-    res.json({ message: 'Comment updated' });
+    const { error } = await db
+      .from('comments')
+      .update({ text })
+      .eq('id', commentId);
 
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ message: 'Comment updated' });
   } catch (err) {
     next(err);
   }
@@ -70,17 +101,28 @@ export const deleteComment = async (req, res, next) => {
     const { commentId } = req.params;
     const userId = req.user.id;
 
-    // Check ownership
-    const [existing] = await db.query('SELECT user_id FROM comments WHERE id = ?', [commentId]);
-    if (existing.length === 0) return res.status(404).json({ error: 'Comment not found' });
+    const { data: existing, error: fetchError } = await db
+      .from('comments')
+      .select('user_id')
+      .eq('id', commentId)
+      .single();
 
-    if (existing[0].user_id !== userId) { // can expand to admin later
+    if (fetchError || !existing) return res.status(404).json({ error: 'Comment not found' });
+
+    if (existing.user_id !== userId) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    await db.query('DELETE FROM comments WHERE id = ?', [commentId]);
-    res.json({ message: 'Comment deleted' });
+    const { error } = await db
+      .from('comments')
+      .delete()
+      .eq('id', commentId);
 
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ message: 'Comment deleted' });
   } catch (err) {
     next(err);
   }
