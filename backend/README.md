@@ -28,7 +28,7 @@ Copy `.env.example` to `.env` and update details:
 ```bash
 cp .env.example .env
 ```
-Update `DB_USER`, `DB_PASSWORD`, `DB_NAME` in `.env`.
+Update `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `JWT_SECRET` in `.env`.
 
 ### 3. Run Development Server
 ```bash
