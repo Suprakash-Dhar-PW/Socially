@@ -19,7 +19,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 const allowedOrigins = [
-    "https://socially-jet-two.vercel.app/"
+    "http://localhost:5173",
+    "https://socially-jet-two.vercel.app"
 ]
 app.use(cors({
     origin: allowedOrigins,
